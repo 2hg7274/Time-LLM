@@ -98,6 +98,17 @@ parser.add_argument('--use_amp', action='store_true', help='use automatic mixed 
 parser.add_argument('--llm_layers', type=int, default=6)
 parser.add_argument('--percent', type=int, default=100)
 
+# LoRA
+parser.add_argument('--lora', action='store_true', help='Activate LoRA adapter fine-tuning')
+parser.add_argument('--lora_r', type=int, default=8, help='LoRA adapter rank (r) parameter')
+parser.add_argument('--lora_alpha', type=int, default=32, help='LoRA adapter alpha parameter')
+parser.add_argument('--lora_dropout', type=float, default=0.05, help='LoRA dropout probability')
+parser.add_argument('--lora_target_modules', type=lambda s: s.split(','), default="q_proj,k_proj,v_proj,o_proj",
+                    help='Comma-separated list of target modules for LoRA adapter (default: q_proj,k_proj,v_proj,o_proj)')
+
+
+parser.add_argument('--delete_checkpoints', action='store_true', help='If set, delete checkpoint files after training')
+
 args = parser.parse_args()
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 deepspeed_plugin = DeepSpeedPlugin(hf_ds_config='./ds_config_zero2.json')
@@ -222,6 +233,16 @@ for ii in range(args.itr):
                 speed = (time.time() - time_now) / iter_count
                 left_time = speed * ((args.train_epochs - epoch) * train_steps - i)
                 accelerator.print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
+
+                ckpt_path = os.path.join(path, f'checkpoint_epoch{epoch+1}_iter{i+1}')
+                if accelerator.is_local_main_process:
+                    if args.lora:
+                        accelerator.print("Saving LoRA adapter checkpoint to:", ckpt_path)
+                        base_llm = accelerator.unwrap_model(model).llm_model
+                        base_llm.save_pretrained(ckpt_path)
+                    else:
+                        accelerator.save(model.state_dict(), ckpt_path + ".pth")
+
                 iter_count = 0
                 time_now = time.time()
 
@@ -264,7 +285,7 @@ for ii in range(args.itr):
             accelerator.print('Updating learning rate to {}'.format(scheduler.get_last_lr()[0]))
 
 accelerator.wait_for_everyone()
-if accelerator.is_local_main_process:
+if accelerator.is_local_main_process and args.delete_checkpoints:
     path = './checkpoints'  # unique checkpoint saving path
     del_files(path)  # delete checkpoint files
     accelerator.print('success delete checkpoints')

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
-    BertModel, BertTokenizer
+    BertModel, BertTokenizer, AutoTokenizer, AutoConfig, AutoModel
 from layers.Embed import PatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
@@ -150,6 +150,39 @@ class Model(nn.Module):
                     trust_remote_code=True,
                     local_files_only=False
                 )
+        elif configs.llm_model == "QWEN":
+            self.qwen_config = AutoConfig.from_pretrained("/media/user/datadisk2/LLM_models/Qwen2.5-14B-Instruct-1M")
+            self.qwen_config.num_hidden_layers = configs.llm_layers
+            self.qwen_config.output_attentions = True
+            self.qwen_config.output_hidden_states = True
+            try:
+                self.llm_model = AutoModel.from_pretrained(
+                    "/media/user/datadisk2/LLM_models/Qwen2.5-14B-Instruct-1M",
+                    trust_remote_code=True,
+                    local_files_only=True,
+                    config=self.qwen_config,
+                )
+            except EnvironmentError:
+                print("Local model files not found. Attempting to download...")
+                self.llm_model = AutoModel.from_pretrained(
+                    "Qwen/Qwen2.5-14B-Instruct-1M",
+                    trust_remote_code=True,
+                    local_files_only=False,
+                    config=self.qwen_config,
+                )
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    "/media/user/datadisk2/LLM_models/Qwen2.5-14B-Instruct-1M",
+                    trust_remote_code=True,
+                    local_files_only=True
+                )
+            except EnvironmentError:
+                print("Local tokenizer files not found. Attempting to download them...")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    "Qwen/Qwen2.5-14B-Instruct-1M",
+                    trust_remote_code=True,
+                    local_files_only=False
+                )
         else:
             raise Exception('LLM model is not defined')
 
@@ -162,6 +195,22 @@ class Model(nn.Module):
 
         for param in self.llm_model.parameters():
             param.requires_grad = False
+
+        # LoRA Adapter
+        if getattr(configs, 'lora', False):
+            try:
+                from peft import LoraConfig, TaskType, get_peft_model
+            except ImportError:
+                raise ImportError("The peft library is not installed. Please install it with 'pip install peft' and try again.")
+            lora_config = LoraConfig(
+                task_type=TaskType.CAUSAL_LM,
+                inference_mode=False,
+                r=getattr(configs, 'lora_r', 8),
+                lora_alpha=getattr(configs, 'lora_alpha', 32),
+                lora_dropout=getattr(configs, 'lora_dropout', 0.1),
+                target_modules=getattr(configs, 'lora_target_modules', ["q_proj", "k_proj", "v_proj", "o_proj"])
+            )
+            self.llm_model = get_peft_model(self.llm_model, lora_config)
 
         if configs.prompt_domain:
             self.description = configs.content
