@@ -35,6 +35,9 @@ parser.add_argument('--model_comment', type=str, required=True, default='none', 
 parser.add_argument('--model', type=str, required=True, default='Autoformer',
                     help='model name, options: [Autoformer, DLinear]')
 parser.add_argument('--seed', type=int, default=2021, help='random seed')
+parser.add_argument('--delete_checkpoints', action='store_true', help='If set, delete checkpoint files after training')
+parser.add_argument('--save_step', type=int, default=100,
+                    help='Save checkpoint every save_step iterations. Set to -1 to disable checkpoint saving')
 
 # data loader
 parser.add_argument('--data', type=str, required=True, default='ETTm1', help='dataset type')
@@ -106,8 +109,6 @@ parser.add_argument('--lora_dropout', type=float, default=0.05, help='LoRA dropo
 parser.add_argument('--lora_target_modules', type=lambda s: s.split(','), default="q_proj,k_proj,v_proj,o_proj",
                     help='Comma-separated list of target modules for LoRA adapter (default: q_proj,k_proj,v_proj,o_proj)')
 
-
-parser.add_argument('--delete_checkpoints', action='store_true', help='If set, delete checkpoint files after training')
 
 args = parser.parse_args()
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
@@ -234,6 +235,10 @@ for ii in range(args.itr):
                 left_time = speed * ((args.train_epochs - epoch) * train_steps - i)
                 accelerator.print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
 
+                iter_count = 0
+                time_now = time.time()
+
+            if args.save_step != -1 and (i + 1) % args.save_step == 0:
                 ckpt_path = os.path.join(path, f'checkpoint_epoch{epoch+1}_iter{i+1}')
                 if accelerator.is_local_main_process:
                     if args.lora:
@@ -243,8 +248,6 @@ for ii in range(args.itr):
                     else:
                         accelerator.save(model.state_dict(), ckpt_path + ".pth")
 
-                iter_count = 0
-                time_now = time.time()
 
             if args.use_amp:
                 scaler.scale(loss).backward()

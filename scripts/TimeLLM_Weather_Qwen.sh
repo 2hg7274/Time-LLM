@@ -1,7 +1,7 @@
 model_name=TimeLLM
 llm_model=QWEN
-train_epochs=1
-learning_rate=0.01
+train_epochs=2
+learning_rate=0.001
 Qwen_layers=48
 llm_dim=5120
 
@@ -18,6 +18,7 @@ accelerate launch --multi_gpu --mixed_precision bf16 --num_processes $num_proces
   --is_training 1 \
   --root_path ./dataset/weather/ \
   --data_path weather2.csv \
+  --save_step 3000 \
   --model_id weather_512_96 \
   --model $model_name \
   --data Weather \
