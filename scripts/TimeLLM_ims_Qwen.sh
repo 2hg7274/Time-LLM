@@ -7,7 +7,7 @@ llm_dim=5120
 
 master_port=10097
 num_process=2
-batch_size=8
+batch_size=12
 d_model=32
 d_ff=32
 
@@ -17,9 +17,11 @@ enc_in=13
 dec_in=13
 c_out=13
 
-seq_len=1024
-pred_len=512
+seq_len=360
+pred_len=60
 label_len=$(($seq_len-$pred_len))
+
+model_id="ims_${seq_len}_${pred_len}"
 
 save_step=5000
 
@@ -30,7 +32,7 @@ accelerate launch --multi_gpu --mixed_precision bf16 --num_processes $num_proces
   --root_path ./dataset/ims/ \
   --data_path ims_logs.csv \
   --save_step $save_step \
-  --model_id ims_1024_512 \
+  --model_id $model_id \
   --model $model_name \
   --data IMS \
   --features M \
