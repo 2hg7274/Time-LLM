@@ -1,3 +1,6 @@
 __pycache__/
 dataset/weather
+dataset/ims
+dataset/prompt_bank/IMS.txt
 checkpoints/
+inference_configs.py
